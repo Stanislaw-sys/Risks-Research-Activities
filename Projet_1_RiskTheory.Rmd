@@ -1,0 +1,914 @@
+---
+title: "Graphics 3D with R"
+author: "Stanislas MBOUNGOU MANGOUBI"
+date: "`r Sys.Date()`"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Apprendre à faire des représentations en trois dimensions avec R
+
+
+Installation des packages
+```{r cars}
+library("scatterplot3d")
+library("rgl")
+library("plot3D")
+library(actuar)
+library(ggplot2)
+```
+
+
+Les variables globales de l'environnement
+```{r}
+theta <- 0.5
+beta_1 <- 0.1
+beta_2 <- 0.15
+
+vectProba1 = c(0.6,0.4)
+vectProba2 = c(0.3, 0.5, 0.2)
+
+```
+
+
+Formation de vecteurs des probabilités
+```{r}
+V_Fonction_Pi <- function(n = integer(), vectProba=c()){
+ 
+   if (n-length(vectProba) > 0 ){
+     ecart <- n-length(vectProba)
+     ecart <- rep(0, ecart)
+     vectProba <- c(vectProba, ecart)
+   }
+  taille <- length(vectProba) 
+  vectPoidsPi <- rep(0, taille)
+  sommeProba <- 0
+  j <- 0
+  while(j < taille){ 
+      j <-  j + 1
+      pi <- 0
+      for( k in 1:j ){
+         ind <- j-k+1
+         pi <- (gamma(j)/(gamma(k)*gamma(ind)))*vectProba[k]*sum(vectProba[ind:taille]) + pi
+      }
+      vectPoidsPi[j] <- (1/2^(j-1))*pi
+      sommeProba <- sommeProba +  vectPoidsPi[j]
+  }
+  #vectPoidsPi <- vectPoidsPi[vectPoidsPi>0]
+  return(vectPoidsPi)
+}
+
+```
+
+Testez la fonction
+```{r}
+(V_Pi1_calcul <- V_Fonction_Pi(n = 5, vectProba= vectProba1))
+(V_Pi2_calcul <- V_Fonction_Pi(n = 5, vectProba= vectProba2))
+```
+
+
+Vecteur de la fonction Omega
+```{r}
+V_Fonction_Omega <-  function(n = 1, vectProba = c(), beta1 = 0.1, beta2 = 0.15){
+    if (n-length(vectProba) > 0 ){
+     ecart <- n-length(vectProba)
+     ecart <- rep(0, ecart)
+     vectProba <- c(vectProba, ecart)
+    }
+    taille <- length(vectProba)
+    vectPoidsPi <- rep(0, taille)
+    sommeProba <- 0
+    k <- 0
+    while(k < taille){ 
+      k <-  k + 1
+      Poids_w <- 0
+      for (j in 1:k) {
+        Poids_w <- Poids_w + vectProba[j]*(gamma(k)/(gamma(j)*gamma(k-j+1)))*(beta1/beta2)^j*(1 - beta1/beta2)^(k-j)
+              }
+      vectPoidsPi[j] <- Poids_w
+      sommeProba <- sum(sommeProba, vectPoidsPi[j], na.rm = T)
+  }
+  vectPoidsPi <- vectPoidsPi[vectPoidsPi>0]
+  return(vectPoidsPi)
+}
+```
+
+
+Testez la fonction
+```{r}
+(V_Omega1_calcul <- V_Fonction_Omega(n = 10, vectProba = V_Pi1_calcul, beta1 = 0.1, beta2 = 0.15))
+list("  \t")
+(V_Omega2_calcul <- V_Fonction_Omega(n = 10, vectProba = V_Pi2_calcul, beta1 = 0.1, beta2 = 0.15))
+```
+
+Vecteur des poids de sigma
+
+```{r}
+V_Fonction_Sigma <- function(n, vectProba1, vectProba2){
+ 
+   vectPoidsPi <- rep(0, n)
+  if( n <= 1){
+    vectPoidsPi[1] <- 0
+    return(vectPoidsPi)
+    }
+  else{ 
+      if((n-length(vectProba1) > 0 )|(n-length(vectProba2) > 0 )){
+         #ecart <- max(n-length(vectProba1), n-length(vectProba2))
+         ecart1 <- n - length(vectProba1)
+         ecart2 <- n - length(vectProba2)
+         ecart1 <- rep(0, ecart1)
+         ecart2 <- rep(0, ecart2)
+         vectProba1 <- c(vectProba1, ecart1)
+         vectProba2 <- c(vectProba2, ecart2)
+        }
+    sommeProba <- 0
+    k <- 1
+    while(k < n){ 
+      k <-  k + 1
+      Poids_w <- 0
+      #vectPoidsPi[k] <- sum(vectProba1[1:k-1]*vectProba2[k-1:1], na.rm = T)
+      for(j in 1:(k - 1)){
+        Poids_w <- Poids_w + vectProba1[j]*vectProba2[k - j]
+        vectPoidsPi[k] <- Poids_w
+      }
+      #sommeProba <- sum(sommeProba, vectPoidsPi[k], na.rm = T)
+  }
+  #vectPoidsPi <- vectPoidsPi[vectPoidsPi>0]
+    #resultat <- list(somme = sommeProba, Poids = vectPoidsPi)
+  return(vectPoidsPi)
+  }
+ 
+}
+
+```
+
+```{r}
+V_Fonction_Sigma <- function(n, vectProba1, vectProba2){
+ 
+   vectPoidsPi <- rep(0, n)
+  if( n <= 1){
+    vectPoidsPi[1] <- 0
+    return(vectPoidsPi)
+    }
+  else{ 
+      if((n-length(vectProba1) > 0 )){
+         ecart1 <- n - length(vectProba1)
+         ecart1 <- rep(0, ecart1)
+         vectProba1 <- c(vectProba1, ecart1)
+      }
+    if((n-length(vectProba2) > 0 )){
+         ecart2 <- n - length(vectProba2)
+         ecart12<- rep(0, ecart2)
+         vectProba2 <- c(vectProba2, ecart2)
+      }
+    sommeProba <- 0
+    k <- 1
+    while(k < n){ 
+      k <-  k + 1
+      Poids_w <- 0
+      #vectPoidsPi[k] <- sum(vectProba1[1:k-1]*vectProba2[k-1:1], na.rm = T)
+      for(j in 1:(k - 1)){
+        Poids_w <- Poids_w + vectProba1[j]*vectProba2[k - j]
+        vectPoidsPi[k] <- Poids_w
+      }
+      #sommeProba <- sum(sommeProba, vectPoidsPi[k], na.rm = T)
+  }
+  #vectPoidsPi <- vectPoidsPi[vectPoidsPi>0]
+    #resultat <- list(somme = sommeProba, Poids = vectPoidsPi)
+  return(vectPoidsPi)
+  }
+ 
+}
+
+```
+
+Testez la fonction
+```{r}
+(V_Sigma_calcul <- V_Fonction_Sigma(n = 40, vectProba1 = V_Omega1_calcul, vectProba2 = V_Omega2_calcul))
+
+#(V_Sigma_calcul <- V_Fonction_Sigma(n = 10, vectProba1 = vectProba1, vectProba2 = vectProba2))
+```
+
+Calculer des poids P_2 dans le cas bivariée
+
+```{r}
+
+theta <- 0.5
+beta_1 <- 0.1
+beta_2 <- 0.15
+
+vectProba1 = c(0.6,0.4)
+vectProba2 = c(0.3, 0.5, 0.2)
+
+indice <- 10
+list("les poids Pi\t")
+(V_Pi1_calcul <- V_Fonction_Pi(n = indice, vectProba= vectProba1))
+(V_Pi2_calcul <- V_Fonction_Pi(n = indice, vectProba= vectProba2))
+list("Les poids Omega\t")
+(V_Omega1_calcul1 <- V_Fonction_Omega(n = indice, vectProba = vectProba1, beta1 = beta_1, beta2 = beta_2*2))
+(V_Omega2_calcul2 <- V_Fonction_Omega(n = indice, vectProba = vectProba2, beta1 = beta_2, beta2 = beta_2*2))
+(V_Omega1_calcul3 <- V_Fonction_Omega(n = indice, vectProba = V_Pi1_calcul, beta1 = beta_1*2, beta2 = beta_2*2))
+list(" Les  poids des sigmas\t")
+(V_Sigma_calcul1 <- V_Fonction_Sigma(n = indice, vectProba1 = V_Omega1_calcul1, vectProba2 = V_Omega2_calcul2))
+(V_Sigma_calcul2 <- V_Fonction_Sigma(n = indice, vectProba1 = V_Omega1_calcul3, vectProba2 = V_Omega2_calcul2))
+(V_Sigma_calcul3 <- V_Fonction_Sigma(n = indice, vectProba1 = V_Omega1_calcul1, vectProba2 = V_Pi2_calcul))
+(V_Sigma_calcul4 <- V_Fonction_Sigma(n = indice, vectProba1 = V_Omega1_calcul3, vectProba2 = V_Pi2_calcul))
+
+list(" Les poids P¨2\t")
+(Proba_2 <- (1 + theta)*V_Sigma_calcul1 - theta*V_Sigma_calcul2 - theta*V_Sigma_calcul3 + theta*V_Sigma_calcul4)
+
+```
+
+```{r}
+
+Fonction_Proba2 <- function( N = 40, theta = 0.5, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2), ...){
+
+V_Pi1_calcul <- V_Fonction_Pi(n = N, vectProba= vectProba1)
+V_Pi2_calcul <- V_Fonction_Pi(n = N, vectProba= vectProba2)
+
+V_Omega1_calcul1 <- V_Fonction_Omega(n = N, vectProba = vectProba1, beta1 = beta_1, beta2 = beta_2*2)
+V_Omega2_calcul2 <- V_Fonction_Omega(n = N, vectProba = vectProba2, beta1 = beta_2, beta2 = beta_2*2)
+V_Omega1_calcul3 <- V_Fonction_Omega(n = N, vectProba = V_Pi1_calcul, beta1 = beta_1*2, beta2 = beta_2*2)
+
+V_Sigma_calcul1 <- V_Fonction_Sigma(n = N, vectProba1 = V_Omega1_calcul1, vectProba2 = V_Omega2_calcul2)
+V_Sigma_calcul2 <- V_Fonction_Sigma(n = N, vectProba1 = V_Omega1_calcul3, vectProba2 = V_Omega2_calcul2)
+V_Sigma_calcul3 <- V_Fonction_Sigma(n = N, vectProba1 = V_Omega1_calcul1, vectProba2 = V_Pi2_calcul)
+V_Sigma_calcul4 <- V_Fonction_Sigma(n = N, vectProba1 = V_Omega1_calcul3, vectProba2 = V_Pi2_calcul)
+
+Proba_2 <- (1 + theta)*V_Sigma_calcul1 - theta*V_Sigma_calcul2 - theta*V_Sigma_calcul3 + theta*V_Sigma_calcul4
+K <- 1:N
+TableProbs <- as.data.frame(cbind(K,Proba_2))
+return(TableProbs)
+}
+
+Fonction_Proba2( N = 40, theta = 0.5, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+```
+
+Afficher mes probabilités
+```{r}
+(Poids_de_S2 <- Fonction_Proba2( N = 40, theta = 0.5, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2)))
+```
+
+Fonction de répartition de S2
+```{r}
+Fonction_repart <- function(x = 1:1000, FUN = Fonction_Proba2, N = 1000, theta = 0.5, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+  {
+  cdf <- 0
+  proba <- rep(0, N) # Initialisation du vecteur des probabilités
+  proba <- FUN(N, theta, beta_1, beta_2, vectProba1, vectProba2)[,2]
+  for(i in 1:N){
+    cdf <- cdf + proba[i]*pgamma(x,i,2*beta_2)
+  }
+ v.cdf <- as.data.frame(cbind(x,cdf))
+ return(v.cdf)
+ }
+
+```
+
+Affichez les résultats de la fonction de répartition de S2
+```{r}
+(cdf <- Fonction_repart(x = 1:265, FUN = Fonction_Proba2, N = 100, theta = 0.5, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2)))
+
+```
+
+Calcul de la VaR de S2 pour un kappa précis
+```{r}
+
+Fonction_VaR_kappa <- function(kappa = 0.95, FUN = Fonction_Proba2, N = 40, theta = 0.5, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+{
+  diff_cdf_kappa <- function(x) abs(Fonction_repart(x, FUN, N, theta, beta_1, beta_2, vectProba1, vectProba2)[,2] - kappa)
+  res <- optimize(diff_cdf_kappa, c(0:110))
+  VaR <- res$minimum
+  return(VaR)
+}
+(Fonction_VaR_kappa(kappa = 0.95, FUN = Fonction_Proba2, N = 40, theta = 0.5, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2)))
+```
+
+Fonction VaR avec kappa qui varie
+```{r}
+F.Var_kappa <- function(kappa = c(0.05, 0.10, 0.50, 0.75, 0.90, 0.95, 0.99, 0.995, 0.999), FUN = Fonction_Proba2, N = 100, theta = 0.5, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+{
+  n = length(kappa)
+  VaR.vector <- rep(0,n)
+  for(i in 1:n){
+    diff_cdf_kappa <- function(x) abs(Fonction_repart(x, FUN, N, theta, beta_1, beta_2, vectProba1, vectProba2)[,2] - kappa[i])
+    res <- optimize(diff_cdf_kappa, c(0:110))
+    VaR <- res$minimum
+    VaR.vector[i] <- VaR
+  }
+   resultat <- as.data.frame(cbind(Kappa = kappa, VaR = VaR.vector))
+   return(resultat)
+}
+
+```
+
+
+Les valeurs calculées de la Value at Risk
+```{r}
+(Tableau_VaR <- F.Var_kappa(kappa = c(0.05, 0.10, 0.50, 0.75, 0.90, 0.95, 0.99, 0.995, 0.999), FUN = Fonction_Proba2, N = 100, theta = 0.5, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2)))
+```
+
+Calcul de la TVaR
+
+```{r}
+
+Fonction_TVaR_S2 <- function(VaR_table = Tableau_VaR, FUN = Fonction_Proba2, N = 40, theta = 0, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+  {
+  P_2 <- rep(0, N) # Initialisation du vecteur des probabilités
+  P_2 <- FUN(N, theta, beta_1, beta_2, vectProba1, vectProba2)[,2]
+  taille <- dim(VaR_table)[1] # Ce nombre correspond au nombre des différentes valeurs de kappa
+  T.VaR <- rep(0, taille)   # Initialisation du vecteur des TVaR
+   for(i in 1:taille){
+       constante <- 0
+       for(j in 1:N){
+         constante <- constante + P_2[j]*j*pgamma(VaR_table[i,2], j + 1, 2*beta_2, lower.tail = FALSE)
+       }
+      T.VaR[i] <- (1/(2*beta_2*(1-VaR_table[i,1])))*constante
+      
+   }
+  resultat <- as.data.frame(cbind(VaR_table,T.VaR))
+  return(resultat)
+}
+
+```
+
+
+Fonction alpha
+```{r }
+Fonction_alpha <- function(n = integer(), poids = c()){
+  NbrePoids <- length(poids)
+  Alpha <- rep(0, n)
+  sommePoids <- 0
+  k <- 1
+  Alpha[1] <- 0
+  p <- 0
+  for(j in 1:NbrePoids){
+           p <- p + j*poids[j]
+        }
+  while(k < n){
+      k <- k + 1
+      Alpha[k] <- ((k - 1)*poids[k-1])/p
+      sommePoids <- sommePoids + Alpha[k]
+  }
+  K <- 1:n
+  Alpha[which(is.na(Alpha) == T, arr.ind = T)] <- 0
+  return(Alpha)
+}
+
+```
+
+
+```{r}
+Fonction_alpha(n = 5, poids = vectProba2)
+```
+
+
+Fonction calculant l'espérance d'une v.a. de mélange d'Erlang
+```{r}
+Fonction_Esp_X <- function(beta = beta_1, poids = vectProba1){
+  k <- 1:length(poids)
+  esp <- (1/beta)*sum(poids[1:length(poids)]*k[1:length(poids)])
+  return(esp)
+  
+}
+Fonction_Esp_X(beta = beta_1, poids = vectProba1)
+```
+
+Calcul de la variance d'une v.a. de mélange d'Erlang
+```{r}
+Fonction_variance_X <- function(beta = beta_1, poids = vectProba1){
+  
+  k <- 1:(length(poids)+1)
+  var <- (1/beta^2)*sum(poids[1:length(poids)]*k[1:length(poids)]*(k[2:length(k)])) - (Fonction_Esp_X(beta, poids))^2
+  return(var)
+}
+
+```
+
+
+Calcul de la covariance entre deux variables aléatoires de mélange d'Erlang
+```{r }
+Fonction_covaraince <- function(theta = 0.5, beta1 = 0.1, beta2 = 0.15, pi1 = V_Pi1_calcul, pi2 = V_Pi2_calcul, prob1 = vectProba1, prob2 = vectProba2){
+    
+   n1 <- length(prob1)  
+   n2 <- length(prob2)
+   #ecart1 <- length(pi1) - length(prob1)
+   #ecart2 <- length(pi2) - length(prob2)
+   #ecart1 <- rep(0, ecart1)
+   #ecart2 <- rep(0, ecart2)
+   #prob1 <- c(prob1, ecart1)
+   #prob2 <- c(prob2, ecart2)
+   cov <- 0
+  for(i in 1:n1){
+    for(j in 1:n2){
+      cov <- cov + i*j*(pi1[i] - prob1[i])*(pi2[j] - prob2[j])
+                   }
+  }
+   cov <- (theta/(beta1*beta2))*cov
+  return(cov)
+}
+Fonction_covaraince(pi1 = V_Pi1_calcul, pi2 = V_Pi2_calcul, prob1 = vectProba1, prob2 = vectProba2, theta = 0.5, beta1 = 0.1, beta2 = 0.15)
+```
+
+Calcul de Pi = E[Xi(1 - F(Xi))]
+```{r}
+ pii <- function(beta, vectproba){
+    n <- length(vectproba)
+    p <- 0
+    for(j in 1:n){
+      p <- p + j*vectproba[j]
+    }
+    p <- (1/(2*beta))*p
+    return(p)
+  }
+  (pi <- pii(beta = beta_1, vectproba = V_Pi1_calcul))
+```
+
+
+
+Calcul des poids q21
+```{r}
+Fonction_Poids_q12 <- function( N = 40, theta = 0.5, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6, 0.4), vectProba2 = c(0.3, 0.5, 0.2)){
+
+esp_X1 <- Fonction_Esp_X(beta = beta_1, poids = vectProba1)
+
+V_Pi1_calcul <- V_Fonction_Pi(n = N, vectProba= vectProba1)
+V_Pi2_calcul <- V_Fonction_Pi(n = N, vectProba= vectProba2)
+
+J <- 1:N
+pi <- (1/(2*beta_1))*sum(J[1:N]*V_Pi1_calcul[1:N], na.rm = T)
+
+V_alpha_1 <- Fonction_alpha(n = N, poids = vectProba1)
+V_alpha_2 <- Fonction_alpha(n = N, poids = V_Pi1_calcul)
+
+V_Omega_calcul1 <- V_Fonction_Omega(n = N, vectProba = V_alpha_1, beta1 = beta_1, beta2 = beta_2*2)
+V_Omega_calcul2 <- V_Fonction_Omega(n = N, vectProba = vectProba2, beta1 = beta_2, beta2 = beta_2*2)
+V_Omega_calcul3 <- V_Fonction_Omega(n = N, vectProba = V_alpha_1, beta1 = beta_1*2, beta2 = beta_2*2)
+
+V_Sigma_calcul1 <- V_Fonction_Sigma(n = N, vectProba1 = V_Omega_calcul1, vectProba2 = V_Omega_calcul2)
+V_Sigma_calcul2 <- V_Fonction_Sigma(n = N, vectProba1 = V_Omega_calcul3, vectProba2 = V_Omega_calcul2)
+V_Sigma_calcul3 <- V_Fonction_Sigma(n = N, vectProba1 = V_Omega_calcul1, vectProba2 = V_Pi2_calcul)
+V_Sigma_calcul4 <- V_Fonction_Sigma(n = N, vectProba1 = V_Omega_calcul3, vectProba2 = V_Pi2_calcul)
+     K <- 0
+     Poids_q21 <- 0
+  if(N > 2){ 
+        Poids_q21 <- (1 + theta)*esp_X1*V_Sigma_calcul1 - theta*pi*V_Sigma_calcul2 - theta*esp_X1*V_Sigma_calcul3 + theta*pi*V_Sigma_calcul4
+        K <- 1:N
+  }
+   else{Poids_q21[1] <- 0 ; Poids_q21[2] <- 0}
+TableProbs <- as.data.frame(cbind(K,Poids_q21))
+return(TableProbs)
+}
+
+Fonction_Poids_q12(N = 40, theta = 0.5, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6, 0.4), vectProba2 = c(0.3, 0.5, 0.2))
+
+```
+
+Calcul des poids q22
+```{r}
+Fonction_Poids_q22 <- function( N = 40, theta = 0.5, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6, 0.4), vectProba2 = c(0.3, 0.5, 0.2)){
+
+esp_X2 <- Fonction_Esp_X(beta = beta_2, poids = vectProba2)
+
+V_Pi1_calcul <- V_Fonction_Pi(n = N, vectProba= vectProba1)
+V_Pi2_calcul <- V_Fonction_Pi(n = N, vectProba= vectProba2)
+
+J <- 1:N
+pi <- (1/(2*beta_2))*sum(J[1:N]*V_Pi2_calcul[1:N], na.rm = T)
+
+V_alpha_1 <- Fonction_alpha(n = N, poids = vectProba2)
+V_alpha_2 <- Fonction_alpha(n = N, poids = V_Pi2_calcul)
+
+V_Omega_calcul1 <- V_Fonction_Omega(n = N, vectProba = V_alpha_1, beta1 = beta_2, beta2 = beta_2*2)
+V_Omega_calcul2 <- V_Fonction_Omega(n = N, vectProba = vectProba1, beta1 = beta_1, beta2 = beta_2*2)
+V_Omega_calcul3 <- V_Fonction_Omega(n = N, vectProba = V_Pi1_calcul, beta1 = beta_1*2, beta2 = beta_2*2)
+
+V_Sigma_calcul1 <- V_Fonction_Sigma(n = N, vectProba1 = V_Omega_calcul1, vectProba2 = V_Omega_calcul2)
+V_Sigma_calcul2 <- V_Fonction_Sigma(n = N, vectProba1 = V_alpha_2, vectProba2 = V_Omega_calcul2)
+V_Sigma_calcul3 <- V_Fonction_Sigma(n = N, vectProba1 = V_Omega_calcul1, vectProba2 = V_Omega_calcul3)
+V_Sigma_calcul4 <- V_Fonction_Sigma(n = N, vectProba1 = V_alpha_2, vectProba2 = V_Omega_calcul3)
+     K <- 0
+     Poids_q22 <- 0
+     if(N > 2){ 
+        Poids_q22 <- (1 + theta)*esp_X2*V_Sigma_calcul1 - theta*pi*V_Sigma_calcul2 - theta*esp_X2*V_Sigma_calcul3 + theta*pi*V_Sigma_calcul4
+        K <- 1:N
+  }
+   else{Poids_q22[1] <- 0 ; Poids_q22[2] <- 0}
+TableProbs <- as.data.frame(cbind(K,Poids_q22))
+return(TableProbs)
+}
+
+Fonction_Poids_q22(N = 5, theta = 0.5, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6, 0.4), vectProba2 = c(0.3, 0.5, 0.2))
+
+```
+
+
+Calcul des contributions des v.a. X1 et X2 au risque global par la méthode basée sur la TVaR
+```{r}
+
+Fonction_TVaR_X1_S2 <- function(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q12, N = 40, theta = 0.5, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2), kappa = 0.95)
+  {
+  q_2 <- rep(0, N) # Initialisation du vecteur des probabilités
+  q_2 <- FUN(N, theta, beta_1, beta_2, vectProba1, vectProba2)[,2]
+  taille <- dim(VaR_table)[1] # Ce nombre correspond au nombre des différentes valeurs de kappa
+  T.VaR_X_S2 <- rep(0, taille)   # Initialisation du vecteur des TVaR
+   for(i in 1:taille){
+       constante <- 0
+       for(j in 1:N){
+         constante <- constante + q_2[j]*pgamma(q = VaR_table[i,2], shape = j, rate = 2*beta_2, lower.tail = FALSE)
+       }
+      T.VaR_X_S2[i] <- (1/(1-VaR_table[i,1]))*constante
+      
+   }
+  resultat <- as.data.frame(cbind(VaR_table,T.VaR_X_S2))
+  return(resultat)
+}
+```
+
+
+Affichez les valeurs
+```{r}
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = -0.8, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+
+Fonction_TVaR_S2(VaR_table = Tableau_VaR, FUN = Fonction_Proba2, N = 40, theta = -0.8, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+
+Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q12, N = 40, theta = -0.8, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+```
+
+
+Calcul de la covariance entre deux variables aléatoires de mélanges d'Erlang
+```{r }
+
+Fonction_covaraince <- function(theta = 0.5, beta1 = 0.1, beta2 = 0.15, pi1 = V_Pi1_calcul, pi2 = V_Pi2_calcul, prob1 = vectProba1, prob2 = vectProba2){
+    
+   n1 <- length(pi1)  
+   n2 <- length(pi2)
+   ecart1 <- length(pi1) - length(prob1)
+   ecart2 <- length(pi2) - length(prob2)
+   
+   ecart1 <- rep(0, ecart1)
+   ecart2 <- rep(0, ecart2)
+   
+   prob1 <- c(prob1, ecart1)
+   prob2 <- c(prob2, ecart2)
+   cov <- 0
+  for(i in 1:n1){
+    for(j in 1:n2){
+      cov <- cov + i*j*(pi1[i] - prob1[i])*(pi2[j] - prob2[j])
+                   }
+  }
+   cov <- (theta/(beta1*beta2))*cov
+   #result <- list(prob1, prob2, cov)
+  return(cov)
+}
+
+Fonction_covaraince(pi1 = V_Pi1_calcul, pi2 = V_Pi2_calcul, prob1 = vectProba1, prob2 = vectProba2, theta = 0.5, beta1 = 0.1, beta2 = 0.15)
+```
+
+
+Calcul des allocations par la CoVariance (X1, S2) et (X2, S2)
+```{r}
+theta00 <- -1
+
+vectProba1 = c(0.6,0.4)
+vectProba2 = c(0.3, 0.5, 0.2)
+#V_Pi1_calcul
+#V_Pi2_calcul
+Proba_S2 <- Fonction_Proba2( N = 40, theta = theta00, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,2]
+pi_S2 <- V_Fonction_Pi(n = 40, vectProba= Proba_S2)
+
+# Variance de S2
+(variance <- Fonction_variance_X(beta = 0.3, poids = Proba_S2))
+
+# Covariance deux à deux
+(cov_x1_s2 <- Fonction_covaraince(pi1 = V_Pi1_calcul, pi2 = pi_S2, prob1 = vectProba1, prob2 = Proba_S2, theta = theta00, beta1 = 0.1, beta2 = 0.3))
+
+(cov_x2_s2 <- Fonction_covaraince(pi1 = V_Pi2_calcul, pi2 = pi_S2, prob1 = vectProba2, prob2 = Proba_S2, theta = theta00, beta1 = 0.1, beta2 = 0.3))
+
+
+# Détermination des contributions
+Fonction_Ck_Xi_S2 <- function(beta1 = 0.1, beta2 = 0.15, kappa = 0.95, prob = vectProba1, prob2 = vectProba2, N = 40, theta = theta00, cov = cov_x1_s2,...){
+  #poids <- (1 + theta)*V_Sigma_calcul1 - theta*V_Sigma_calcul2 - theta*V_Sigma_calcul3 + theta*V_Sigma_calcul4
+ 
+   w <- V_Fonction_Omega(n = N, prob, beta1 , beta2)
+  
+   H <- rep(0, N)
+    for(j in 1:N){
+      H[j] <- (1/(1-kappa))*pgamma(VaR_0.95, j + 1, 2*beta_2, lower.tail = FALSE) - 1
+    }
+
+    Ck_Xi_S2 <- 0
+    for(k in 1:N){
+      Ck_Xi_S2 <- Ck_Xi_S2 + (w[k] + (cov/(2*variance))*Proba_S2[k]*H[k])*k
+    }
+    Ck_Xi_S2 <- Ck_Xi_S2/beta_2
+    return(Ck_Xi_S2)
+}
+
+Fonction_Ck_Xi_S2(beta1 = 0.1, beta2 = 0.15, kappa = 0.95, prob = vectProba1, prob2 = vectProba2, N = 40,  theta = theta00, cov = cov_x1_s2)
+Fonction_Ck_Xi_S2(beta1 = 0.1, beta2 = 0.15, kappa = 0.95, prob = vectProba2, prob2 = vectProba2, N = 40,  theta = theta00, cov = cov_x1_s2)
+
+```
+
+
+Calcul des contributions par la méthode la covariance
+```{r}
+
+Fonction_Ck_Xi_S2 <- function(beta1 = 0.1, beta2 = 0.15, kappa = 0.95, prob = vectProba1, prob2 = vectProba2, N = 40, theta = -1,...){
+  poids <- (1 + theta)*V_Sigma_calcul1 - theta*V_Sigma_calcul2 - theta*V_Sigma_calcul3 + theta*V_Sigma_calcul4
+  w <- V_Fonction_Omega(n = N, prob, beta1 , beta2)
+  cov <- Fonction_covaraince(pi1 = V_Pi1_calcul, pi2 = V_Pi2_calcul, prob1 = vectProba1, prob2 = vectProba2, theta = theta, beta1 , beta2 )
+  variance <- Function_Variance_S2(beta = beta_2, poids = Poids_de_S2[,2])
+  
+  H <- rep(0, N)
+    for(j in 1:N){
+      H[j] <- (1/(1-kappa))*pgamma(VaR_0.95, j + 1, 2*beta_2, lower.tail = FALSE) - 1
+    }
+
+    Ck_Xi_S2 <- 0
+    for(k in 1:N){
+      Ck_Xi_S2 <- Ck_Xi_S2 + (w[k] + (cov/(2*variance))*poids[k]*H[k])*k/beta_2
+    }
+    return(Ck_Xi_S2)
+}
+
+Fonction_Ck_Xi_S2(beta1 = 0.1, beta2 = 0.15, kappa = 0.95, prob = vectProba1, prob2 = vectProba2, N = 40, theta = -1)
+  
+```
+
+
+###### Résultats de l'exemple n01  ########
+
+#Table 1 : Descriptive statistics of X1 and X2
+Espérance
+```{r}
+(Esp_X1 <- Fonction_Esp_X(beta = beta_1, poids = vectProba1))
+(Esp_X2 <- Fonction_Esp_X(beta = beta_2, poids = vectProba2))
+```
+
+Calcul de la Variance de X1, X2 et S2
+```{r}
+(VarX1 <- Fonction_variance_X(beta = 0.1, poids = vectProba1))
+(VarX2 <- Fonction_variance_X(beta = 0.15, poids = vectProba2))
+(var_S2 <- Fonction_variance_X(beta = 0.3, poids = Proba_S2))
+```
+
+# Table 2 : Probabilities p(2) k for S2 = X1 + X2.
+```{r}
+Fonction_Proba2( N = 40, theta = 0.5, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+```
+# Résultats de la "Table 3 : Value-at-Risk measures and Tail-Value-at-Risk measures for S2 = X1 + X2" de l'article
+```{r}
+Tableau_VaR <- F.Var_kappa(kappa = c(0.05, 0.10, 0.50, 0.75, 0.90, 0.95, 0.99, 0.995, 0.999), FUN = Fonction_Proba2, N = 40, theta = 0.5, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+Fonction_TVaR_S2(VaR_table = Tableau_VaR, FUN = Fonction_Proba2, N = 40, theta = 0.5, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+```
+
+
+#Table 4 : Amounts allocated under the TVaR-based and the covariance-based rules.
+```{r}
+thetas <- seq(-1,1, by = .2)
+kappas <- seq(0, 1, by = .2)
+
+(Tableau_VaR <- F.Var_kappa(kappa = kappas, FUN = Fonction_Proba2, N = 40, theta = 0.5, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2)))
+Fonction_TVaR_S2(VaR_table = Tableau_VaR, FUN = Fonction_Proba2, N = 40, theta = 0.5, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+
+
+df_TVaRS2 <- function(kappa = seq(0, 1, by = .2), FUN = Fonction_Proba2, N = 5, theta = seq(-1,1, by = .2), beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2)){
+   
+    #l1 <- rep(theta, length(kappa))  ; l1[sort(l1)]
+    #l2 <- rep(kappa, length(theta))  ; l1[sort(l2)]
+      l1 <- length(kappa)
+      l2 <- length(theta)
+  
+    TVaR <- rep(0, l1*l2)
+    k <- 0
+    for(i in 1:l1){
+      for(j in 1:l2){
+        k <- k + 1
+        ka <- kappa[i]
+        te <- theta[j]
+        Tableau_VaR <- F.Var_kappa(kappa = ka, FUN = Fonction_Proba2, N, theta = te, beta_1, beta_2, vectProba1, vectProba2)[,2]
+        TVaR[k] <- Fonction_TVaR_S2(VaR_table = Tableau_VaR, FUN = Fonction_Proba2, N, theta = te, beta_1, beta_2 , vectProba1, vectProba2)[,3]
+      }
+    }
+     Kappa <- 0 ; Theta <- 0
+    Kappa <- rep(theta, length(kappa))  ; Kappa[sort(Kappa)]
+    Theta <- rep(kappa, length(theta))  ; Theta[sort(Theta)]
+    df <- as.data.frame(cbind(Kappa, Theta, TVaR))
+    return(df)
+}
+
+df_TVaRS2(kappa = seq(0, 1, by = .2), FUN = Fonction_Proba2, N = 10, theta = seq(-1,1, by = .2), beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+```
+
+
+####Fig. 1. Capital allocation based on the TVaR and the covariance rules.
+
+TVaR de S2 suivant theta
+```{r}
+Tableau_VaR <- F.Var_kappa(kappa = .95, FUN = Fonction_Proba2, N = 40, theta = -1, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+s1 <- Fonction_TVaR_S2(VaR_table = Tableau_VaR, FUN = Fonction_Proba2, N = 40, theta = -1, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = .95, FUN = Fonction_Proba2, N = 40, theta = -0.8, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+s2 <- Fonction_TVaR_S2(VaR_table = Tableau_VaR, FUN = Fonction_Proba2, N = 40, theta = -0.8, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = .95, FUN = Fonction_Proba2, N = 40, theta = -0.6, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+s3 <- Fonction_TVaR_S2(VaR_table = Tableau_VaR, FUN = Fonction_Proba2, N = 40, theta = -0.6, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = .95, FUN = Fonction_Proba2, N = 40, theta = -0.4, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+s4 <- Fonction_TVaR_S2(VaR_table = Tableau_VaR, FUN = Fonction_Proba2, N = 40, theta = -0.4, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = .95, FUN = Fonction_Proba2, N = 40, theta = -0.2, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+s5 <- Fonction_TVaR_S2(VaR_table = Tableau_VaR, FUN = Fonction_Proba2, N = 40, theta = -0.2, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = .95, FUN = Fonction_Proba2, N = 40, theta = 0, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+s6 <- Fonction_TVaR_S2(VaR_table = Tableau_VaR, FUN = Fonction_Proba2, N = 40, theta = 0, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = .95, FUN = Fonction_Proba2, N = 40, theta = 1, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+s7 <- Fonction_TVaR_S2(VaR_table = Tableau_VaR, FUN = Fonction_Proba2, N = 40, theta = 1, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = .95, FUN = Fonction_Proba2, N = 40, theta = 0.8, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+s8 <- Fonction_TVaR_S2(VaR_table = Tableau_VaR, FUN = Fonction_Proba2, N = 40, theta = 0.8, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = .95, FUN = Fonction_Proba2, N = 40, theta = 0.6, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+s9 <- Fonction_TVaR_S2(VaR_table = Tableau_VaR, FUN = Fonction_Proba2, N = 40, theta = 0.6, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = .95, FUN = Fonction_Proba2, N = 40, theta = 0.4, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+s10 <- Fonction_TVaR_S2(VaR_table = Tableau_VaR, FUN = Fonction_Proba2, N = 40, theta = 0.4, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = .95, FUN = Fonction_Proba2, N = 40, theta = 0.2, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+s11 <- Fonction_TVaR_S2(VaR_table = Tableau_VaR, FUN = Fonction_Proba2, N = 40, theta = .2, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+```
+
+TVaR de pour kappa =0.95 et theta variant entre -1 et 1
+```{r}
+(v_TVaR_S2 <- c(s1, s2, s3, s4, s5, s6,s7, s8, s9, s10, s11))
+```
+
+TVaR de X1 et S2 suivant theta
+```{r}
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = -1, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+x11 <- Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q12, N = 40, theta = -1, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = -.2, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+x12 <- Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q12, N = 40, theta = -.2, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = -.4, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+x13 <- Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q12, N = 40, theta = -.4, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = -.6, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+x14 <- Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q12, N = 40, theta = -.6, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = -.8, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+x15 <- Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q12, N = 40, theta = -.8, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = 0, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+x16 <- Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q12, N = 40, theta = 0, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = 1, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+x17 <- Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q12, N = 40, theta = 1, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = .2, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+x18 <- Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q12, N = 40, theta = .2, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = .4, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+x19 <- Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q12, N = 40, theta = .4, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = .6, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+x110 <- Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q12, N = 40, theta = .6, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = .8, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+x111 <- Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q12, N = 40, theta = .8, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+```
+
+
+```{r}
+(v_TVaR_x1_S2 <- c(x11, x12, x13, x14, x15, x16, x17, x18, x19, x110, x111))
+```
+
+
+TVaR de X2 et S2 suivant theta
+```{r}
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = -1, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+x11 <- Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q22, N = 40, theta = -1, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = -.2, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+x12 <- Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q22, N = 40, theta = -.2, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = -.4, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+x13 <- Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q22, N = 40, theta = -.4, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = -.6, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+x14 <- Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q22, N = 40, theta = -.6, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = -.8, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+x15 <- Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q22, N = 40, theta = -.8, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = 0, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+x16 <- Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q22, N = 40, theta = 0, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = 1, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+x17 <- Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q22, N = 40, theta = 1, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = .2, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+x18 <- Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q22, N = 40, theta = .2, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = .4, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+x19 <- Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q22, N = 40, theta = .4, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = .6, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+x110 <- Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q22, N = 40, theta = .6, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+
+Tableau_VaR <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = .8, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))
+x111 <- Fonction_TVaR_X1_S2(VaR_table = Tableau_VaR, FUN = Fonction_Poids_q22, N = 40, theta = .8, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,3]
+```
+
+```{r}
+Tableau_VaR1 <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = -1, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,2]
+
+Tableau_VaR2 <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = -.2, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,2]
+
+Tableau_VaR3 <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = -.4, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,2]
+
+Tableau_VaR4 <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = -.6, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,2]
+
+Tableau_VaR5 <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = -.8, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,2]
+
+Tableau_VaR6 <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = 0, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,2]
+
+Tableau_VaR7 <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = 1, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,2]
+
+Tableau_VaR8 <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = .2, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,2]
+
+Tableau_VaR9 <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = .4, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,2]
+
+Tableau_VaR10 <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = .6, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,2]
+
+Tableau_VaR11 <- F.Var_kappa(kappa = c(0.95), FUN = Fonction_Proba2, N = 40, theta = .8, beta_1 = 0.1, beta_2 = 0.15, vectProba1 = c(0.6,0.4), vectProba2 = c(0.3, 0.5, 0.2))[,2]
+
+```
+
+
+
+```{r}
+
+VaR_0.95 <- c(Tableau_VaR1, Tableau_VaR2, Tableau_VaR3, Tableau_VaR4, Tableau_VaR5, Tableau_VaR6, Tableau_VaR7, Tableau_VaR8, Tableau_VaR9, Tableau_VaR10, Tableau_VaR11)
+(v_TVaR_x2_S2 <- c(x11, x12, x13, x14, x15, x16, x17, x18, x19, x110, x111))
+```
+
+#Table 4 : Amounts allocated under the TVaR-based and the covariance-based rules.
+```{r}
+(df <- as.data.frame(cbind(thetas, VaR_0.95, v_TVaR_S2, v_TVaR_x1_S2, v_TVaR_x2_S2)))
+df1 <- stack(df[,-1])
+Theta000 <- rep(thetas, )
+df2 <- as.data.frame(cbind(Theta000, df1))
+colnames(df2) <- c("Theta", "Valeurs", "TVaR_0.95")
+```
+
+
+# Fig. 1. Capital allocation based on the TVaR and the covariance rules
+```{r}
+library(ggplot2)
+p <- ggplot(data=df2, aes(x=Theta, y=Valeurs, fill=TVaR_0.95)) +
+  geom_bar(stat="identity", position=position_dodge())
+
+```
+
+
+```{r}
+
+ggsave("mon_graphique.png", plot = p)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

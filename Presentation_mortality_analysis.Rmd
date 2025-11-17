@@ -1,0 +1,882 @@
+---
+title: "Mortality Case Study"
+author: "Stanislas MBOUNGOU MANGOUBI"
+date: "`r Sys.Date()`"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# Set work directory
+
+```{r}
+setwd("~/Documents/BootCamp/Assignment2")
+```
+
+# Libraries
+
+```{r cars}
+library(tidyverse)
+library(scales)
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(glue)
+```
+
+# Import data
+
+```{r}
+policyTable <- read_xlsx(path = "assignment-2-mortality-case-study.xlsx", sheet = "ImportInto_R")
+write_rds(policyTable, "policyTable.RDS")
+```
+
+```{r}
+write_rds(policyTable, "policyTable.RDS")
+```
+
+
+# Clean data
+
+```{r, echo=FALSE}
+# Clean column
+policyTable <- policyTable %>%
+  rename_with(~ gsub(" ", "_", .x)) %>%
+  mutate(Death = ifelse(Death == 1, 1, 0))
+
+# Overall mortality rate per calendar year
+mortality_by_year <- policyTable %>%
+  group_by(Calendar_Year) %>%
+  summarise(
+    Deaths = sum(Death, na.rm = TRUE),
+    Exposures = n(),
+    Mortality_Rate = Deaths / Exposures
+  )
+
+# Visualisation
+ggplot(mortality_by_year, aes(x = Calendar_Year, y = Mortality_Rate)) +
+  geom_line(color = "red", size = 1.2) +
+  geom_point() +
+  scale_y_continuous(labels = percent_format()) +
+  labs(
+    title = "Overall Mortality Rate by Calendar Year",
+    y = "Mortality Rate",
+    x = "Year"
+  ) +
+  theme_minimal()
+
+```
+
+This chart shows that the overall mortality of the portfolio deteriorated rapidly between 2005 and 2014,
+with high volatility and a sharp drop below 0.3% between 2007 and 2008.
+Overall, the relative increase in mortality rate from 2005 to 2014 is 97.9%, corresponding to an average annual growth of 7.88%.
+
+$$ 
+\text{Average Growth of Mortality Rate} = \left( \frac{\text{Mortality Rate of smokers 2014}}{\text{Mortality Rate of smokers 2005}} \right)^{\frac{1}{2014 - 2005}} - 1.
+$$
+
+$$ 
+\text{Growth of Mortality Rate} = \left( \frac{\text{Mortality Rate of smokers 2014} - \text{Mortality Rate of smokers 2005}}{\text{Mortality Rate of smokers 2005}} \right).
+$$
+
+
+# Moratlity rate by subpopulation
+
+## Analyze by smoker profil
+```{r}
+# Smoker Status
+mortality_by_smoker <- policyTable %>%
+  group_by(Calendar_Year, Smoker_Profil) %>%
+  summarise(
+    Deaths = sum(Death, na.rm = TRUE),
+    Exposures = n(),
+    Mortality_Rate = Deaths / Exposures
+  )
+
+# Mortality Rate by smoker profil per calendar year
+ggplot(mortality_by_smoker, aes(x = Calendar_Year, y = Mortality_Rate, color = Smoker_Profil)) +
+  geom_line(size = 1.2) +
+  geom_point() +
+  scale_y_continuous(labels = percent_format()) +
+  labs(
+    title = "Mortality Rate by Smoker Status",
+    y = "Mortality Rate",
+    x = "Year",
+    color = "Smoker Status"
+  ) +
+  theme_minimal()
+
+```
+
+We can notice the quick growth of mortality rate per calendar year in both subpopulation.
+But, the increase is higher in the subpopulation of smokers Let analyze this variable in depth.
+
+
+## Comparison of the increase of the proportion of smokers and the proportion of non smokers per calendar year
+```{r}
+# Proportion de fumeurs et non-fumeurs par année
+smoker_composition <- policyTable %>%
+  group_by(Calendar_Year, Smoker_Profil) %>%
+  summarise(Exposures = n(), .groups = "drop") %>%
+  group_by(Calendar_Year) %>%
+  mutate(Proportion = Exposures / sum(Exposures))
+
+# The increase of smokers and non smokers per calendar year
+ggplot(smoker_composition, aes(x = Calendar_Year, y = Proportion, color = Smoker_Profil)) +
+  geom_line(size = 1.2) +
+  geom_point() +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(
+    title = "Proportion of Smokers and Non-Smokers Over Time",
+    x = "Calendar Year",
+    y = "Proportion of Policyholders",
+    color = "Smoker Profile"
+  ) +
+  theme_minimal()
+
+ggplot(smoker_composition, aes(x = Calendar_Year, y = Proportion, fill = Smoker_Profil)) +
+  geom_area(alpha = 0.8) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(
+    title = "Business Mix Over Time: Smokers vs Non-Smokers",
+    x = "Calendar Year",
+    y = "Proportion",
+    fill = "Smoker Profile"
+  ) +
+  theme_minimal()
+```
+
+The plot above shows crearly that the proportion of smokers has been increasing over years in
+the client portfolio, whereas it's been decreasing for non smokers.
+
+
+## How fast that number has increased by smoker profil?
+```{r}
+smoker_composition0 <- smoker_composition %>% filter(Smoker_Profil != "Smoker")
+smoker_composition1 <- smoker_composition %>% filter(Smoker_Profil == "Smoker")
+
+# The growth of the proportion of smokers per year between 2005 and 2014
+Prop.Smokers.Growth <- (smoker_composition1$Proportion[10] - smoker_composition1$Proportion[1])/smoker_composition1$Proportion[1]
+paste("The proportion of smokers has grown by: ", round(Prop.Smokers.Growth*100, 2), "% between 2005  and 2014.")
+
+
+# The Average growth of the proportion of smokers per calendar year
+Average.Smokers.Growth <- (smoker_composition1$Proportion[10]/smoker_composition1$Proportion[1])^(1/(2014 - 2005)) - 1
+paste("The Average increase of the proportion of smokers is: ", round(Average.Smokers.Growth*100, 2), "% per calendar year.")
+
+
+# print("   Non smoker "\n)
+# The growth of the number of smokers between 2005 and 2014
+Non.Smokers.Growth <- (smoker_composition0$Proportion[10] - smoker_composition0$Proportion[1])/smoker_composition0$Proportion[1]
+paste("The proportion of non smokers has decreased by: ", round(Non.Smokers.Growth*100, 2), "% between 2005 and 2014.")
+
+
+# The Average growth of the number of non smokers per calendar year
+Average.Non.Smokers.Growth <- (smoker_composition0$Proportion[10]/smoker_composition0$Proportion[1])^(1/(2014 - 2005)) - 1
+paste("The Average proportional decrease of the proportion of non smokers is: ", round(Average.Non.Smokers.Growth*100, 2), "% per calendar year.")
+```
+
+## Comparison of the increase of mortality rate by smoker profil
+
+```{r}
+mortality_by_smoker1 <- mortality_by_smoker %>% filter(Smoker_Profil == "Smoker")
+
+print("    Smokers ")
+# The Growth rate of the mortality rate among smokers between 2005 and 2014
+Mortality.Growth.Rate.among.Smokers <- (mortality_by_smoker1$Mortality_Rate[10] - mortality_by_smoker1$Mortality_Rate[1])/mortality_by_smoker1$Mortality_Rate[1]
+paste("The growth rate of the mortality rate among smokers per calendar year is : ", round(Mortality.Growth.Rate.among.Smokers*100, 2), "%")
+
+
+# The Average growth of mortality rate among smokers after 9 years (2014 - 2005) is:
+Average.Mortality.Growth.Rate.among.Smokers <- (mortality_by_smoker1$Mortality_Rate[10]/mortality_by_smoker1$Mortality_Rate[1])^(1/(2014 - 2005)) - 1
+paste("The Average Growth of Mortality rate among smokers per calendar year is: ", round(Average.Mortality.Growth.Rate.among.Smokers*100, 2), "%")
+
+
+print("   Non smokers ")
+mortality_by_smoker0 <- mortality_by_smoker %>% filter(Smoker_Profil != "Smoker")
+
+# The Growth rate of the mortality rate among smokers between 2005 and 2014
+Mortality.Growth.Rate.among.NonSmoker <-(mortality_by_smoker0$Mortality_Rate[10] - mortality_by_smoker0$Mortality_Rate[1])/mortality_by_smoker0$Mortality_Rate[1]
+paste("The growth rate of the mortality rate among non smokers per calendar year is : ", round(Mortality.Growth.Rate.among.NonSmoker*100, 2), "%")
+
+
+# The Average growth of mortality rate among smokers after 9 years (2014 - 2005) is:
+Average.Mortality.Growth.Rate.among.NonSmoker <- (mortality_by_smoker0$Mortality_Rate[10]/mortality_by_smoker0$Mortality_Rate[1])^(1/(2014 - 2005)) - 1
+paste("The Average Growth of Mortality rate among  non smokers per calendar y ", round(Average.Mortality.Growth.Rate.among.NonSmoker*100, 2), "%")
+
+
+```
+
+The Average Growth of the Mortality rate among smokers between 2014 and 2005 is given by : \\
+
+$$ 
+\text{Average Growth of Mortality Rate} = \left( \frac{\text{Mortality Rate of smokers 2014}}{\text{Mortality Rate of smokers 2005}} \right)^{\frac{1}{2014 - 2005}} - 1.
+$$ \newline
+
+The increase of mortality rate is so notable in this specific subpopulation of smokers and the non smokers number is increasing over years.
+Then, it is obvious that this growth triggers the increase of overall mortality rate by calendar year.
+
+## Key Findings on Smoker Population Trends
+
+1.  The proportion of **smokers** in the portfolio has **increased by 21.68%** between 2005 and 2014.
+This corresponds to an average increase of **2.2% per year**.
+
+2.  Conversely, the proportion of **non-smokers** has **decreased by 5.38%** over the same period, with an average annual decrease of **0.61%**.
+
+3.  **Mortality rates** have followed a similar upward trend among smokers:
+
+    -   The mortality rate among smokers has grown by **301.24%** between 2005 and 2014, with an average annual growth rate of **16.69%**.
+    -   Among non-smokers, mortality has increased by **53.38%**, with an average annual growth of **4.87%**.
+
+
+\textbf{Interpretation:}
+
+The smoker population has steadily increased over the years, both in terms of proportion and mortality risk.
+The growth in smoker mortality (over 300%) far outpaces that of non-smokers, which suggests a compounding
+effect of adverse selection or insufficient underwriting adjustments.
+
+These trends highlight the importance of:
+
+Monitoring the mix of insured lives over time;
+
+Adjusting premiums and reserves accordingly;
+
+Reinforcing anti-selection mitigation strategies (e.g., more granular pricing, mandatory medical underwriting).
+
+
+# Mix business
+
+## Mortality by Agent
+
+### Add the average annual rate of mortality of portfolio
+
+```{r}
+# Taux de mortalité par agent et par année
+mortality_by_agent_year <- policyTable %>%
+  group_by(Calendar_Year, Agent) %>%
+  summarise(
+    Deaths = sum(Death, na.rm = TRUE),
+    Exposures = n(),
+    Mortality_Rate = Deaths / Exposures
+  ) %>%
+  ungroup()
+
+# Taux global par année
+mortality_total_year <- policyTable %>%
+  group_by(Calendar_Year) %>%
+  summarise(Global_Mortality = sum(Death, na.rm = TRUE) / n())
+
+# Fusion pour comparer agent vs global
+mortality_agent_vs_total <- mortality_by_agent_year %>%
+  left_join(mortality_total_year, by = "Calendar_Year")
+
+# Visualization by agent : mortality rate by agent versus overall
+ggplot(mortality_agent_vs_total, aes(x = Calendar_Year)) +
+  geom_line(aes(y = Mortality_Rate, color = as.factor(Agent)), size = 1.2) +
+  geom_line(aes(y = Global_Mortality), color = "black", linetype = "dashed", size = 1.8) +
+  labs(
+    title = "Agent-specific vs Portfolio-wide Mortality Rate",
+    y = "Mortality Rate",
+    x = "Calendar Year",
+    color = "Agent"
+  ) +
+  scale_y_continuous(labels = percent_format()) +
+  theme_minimal()
+```
+
+## Key Findings of Mortality by Agent :
+
+**Agent-specific vs Portfolio-wide Mortality Rate**
+
+### The plot compares mortality rates over time for each agent with the overall portfolio-wide mortality rate (in pink). Several key insights emerge:
+
+1.  General Upward Trend All agents show a general increase in mortality rates between 2005 and 2014, which mirrors the upward trend in the portfolio-wide mortality rate. This indicates that the deterioration is not limited to a single agent but rather affects the portfolio globally.
+
+2.  Persistent Above-Average Mortality (Agent 5) Agent 5 (in pink) consistently exhibits mortality rates higher than the rest of the portfolio from 2005 to 2014, except for a few minor dips. This could suggest a systematically higher-risk subpopulation (e.g., poorer underwriting or specific client segment).
+
+3.  Volatility and Fluctuations Agents 1, 2 and 4 show more fluctuations in year-to-year mortality rates, especially before 2010. This may indicate instability in the insured population or small exposure sizes.
+
+4.  Convergence Around 2012-2013 Around 2012–2013, mortality rates across agents converge more closely, suggesting a possible homogenization of risk profiles or business practices.
+
+### Implications
+
+The **persistent deviation of Agent 5 from the rest of the group** might warrant further investigation—especially by examining:
+
+    -  Average issue age of clients.
+    -  Smoker status distribution.
+    -  Socio-economic classification (white/blue collar).
+
+
+## Proportion of portfolio by Agent
+```{r}
+composition_agent <- policyTable %>%
+  group_by(Calendar_Year, Agent) %>%
+  summarise(Exposures = n()) %>%
+  group_by(Calendar_Year) %>%
+  mutate(Proportion = Exposures / sum(Exposures))
+
+ggplot(composition_agent, aes(x = Calendar_Year, y = Proportion, fill = as.factor(Agent))) +
+  geom_area(alpha = 0.8) +
+  scale_y_continuous(labels = percent_format()) +
+  labs(
+    title = "Business Mix: Proportion of Policies by Agent",
+    y = "Proportion",
+    x = "Calendar Year",
+    fill = "Agent"
+  ) +
+  theme_minimal()
+```
+
+The proportion of portfolio seems to converge to be the uniform between agent when we approach 2014.
+But, the most important increase is noticed in the part of agent 5, who started with less than 10%
+of part in 2005. He reach more than 20% in 2014.
+
+
+## Evolution of the proportion of Blue/White Collar policyholders in the portfolio
+```{r}
+composition_collar <- policyTable %>%
+  group_by(Calendar_Year, Blue_or_White_Collar) %>%
+  summarise(Exposures = n()) %>%
+  group_by(Calendar_Year) %>%
+  mutate(Proportion = Exposures / sum(Exposures))
+
+ggplot(composition_collar, aes(x = Calendar_Year, y = Proportion, fill = Blue_or_White_Collar)) +
+  geom_area(alpha = 0.8) +
+  scale_y_continuous(labels = percent_format()) +
+  labs(
+    title = "Business Mix: Exposure by Blue vs White Collar",
+    y = "Proportion",
+    x = "Calendar Year",
+    fill = "Occupation Type"
+  ) +
+  theme_minimal()
+
+ggplot(composition_collar, aes(x = Calendar_Year)) +
+  geom_line(aes(y = Proportion, color = as.factor(Blue_or_White_Collar)), size = 1.2) +
+  # scale_y_continuous(labels = percent_format()) +
+  labs(
+    title = "Business Mix: Exposure by Blue vs White Collar",
+    y = "Proportion",
+    x = "Calendar Year",
+    color = "Occupation Type"
+  ) +
+  scale_y_continuous(labels = percent_format()) +
+  theme_minimal()
+
+```
+
+**Interpretation** White collar represents more than 70% of the global portfolio and seems to increase over years. 
+Whereas, Blue collar represents less 30% and decreases over years.
+
+
+## Mortality by Blue/White Collar [Take the one in Excel]
+```{r}
+composition_collar01 <- policyTable %>%
+  group_by(Calendar_Year, Blue_or_White_Collar, Death) %>%
+  summarise(Exposures = n()) %>%
+  mutate(Proportion = Exposures / sum(Exposures))
+
+composition_collar01 <- composition_collar01 %>% filter(Death == 1)
+
+ggplot(composition_collar01, aes(x = Calendar_Year)) +
+  geom_line(aes(y = Proportion, color = as.factor(Blue_or_White_Collar)), size = 1.2) +
+  labs(
+    title = "Business Mix: Blue vs White Collar",
+    y = "Mortality Rate",
+    x = "Calendar Year",
+    color = "Occupation Type"
+  ) +
+  scale_y_continuous(labels = percent_format()) +
+  theme_minimal()
+```
+
+**Interpretation**
+  This plot shows that in both socio-professional subpopulations (blue and white),
+  there is a deterioration of mortality rate.
+  But, that deterioration is more volatile and higher among blue collar policyholders. 
+  Indeed, between 2005 and 2014, the mortality rate has increased by 789.9% in blue collar sub population.
+  In comparison with white collar policyholders where the increase is of 42.53%, it is obvious that
+  there are some issues with the blue collar subpopulation.
+  White-collar policyholders account for more than 70% of the total exposure and exhibit consistently
+  lower mortality rates than their blue-collar counterparts.
+  However, since the mix has not shifted significantly over time, this factor is unlikely to be the primary
+  driver behind the increase in overall mortality.`
+
+
+## Distribution of the average Issue age at death
+```{r}
+issue_age_by_year <- policyTable %>%
+  group_by(Calendar_Year, Death) %>%
+  summarise(
+    Avg_Issue_Age = mean(Issue_Age, na.rm = TRUE),
+    Median_Issue_Age = median(Issue_Age, na.rm = TRUE)
+  )
+
+# The annual average issue ages of death policyholders in each year
+issue_age_by_year01 <- issue_age_by_year %>% filter(Death == 1)
+
+ggplot(issue_age_by_year01, aes(x = Calendar_Year)) +
+  geom_line(aes(y = Avg_Issue_Age), color = "darkgreen", size = 1.2) +
+  geom_point(aes(y = Avg_Issue_Age)) +
+  geom_line(aes(y = Median_Issue_Age), color = "orange", linetype = "dashed") +
+  labs(
+    title = "Average and Median Issue Age by Year of death policyholders",
+    x = "Calendar Year",
+    y = "Issue Age"
+  ) +
+  theme_minimal()
+
+# The annual average issue ages of policyholders alive
+issue_age_by_year <- issue_age_by_year %>% filter(Death == 0)
+
+ggplot(issue_age_by_year, aes(x = Calendar_Year)) +
+  geom_line(aes(y = Avg_Issue_Age), color = "darkgreen", size = 1.2) +
+  geom_point(aes(y = Avg_Issue_Age)) +
+  geom_line(aes(y = Median_Issue_Age), color = "orange", linetype = "dashed") +
+  labs(
+    title = "Average and Median Issue Age by year of policyholders still alive",
+    x = "Calendar Year",
+    y = "Issue Age"
+  ) +
+  theme_minimal()
+```
+
+These is the distribution of annual average ages of policyholders (already dead) when they join the pool.
+
+
+## Distribution of the annual average attained age at death between 2005 and 2014
+```{r}
+AVG.attained_age_by_year <- policyTable %>%
+  group_by(Calendar_Year, Death) %>%
+  summarise(
+    Avg_Attained_Age_per_year = mean(Attained_Age, na.rm = TRUE),
+    Median_Attained_Age_per_year = median(Attained_Age, na.rm = TRUE)
+  )
+
+# The annual average issue ages of death policyholders in each year
+AVG.attained_age_by_year01 <- AVG.attained_age_by_year %>% filter(Death == 1)
+
+ggplot(AVG.attained_age_by_year01, aes(x = Calendar_Year)) +
+  geom_line(aes(y = Avg_Attained_Age_per_year), color = "darkgreen", size = 1.2) +
+  geom_point(aes(y = Avg_Attained_Age_per_year)) +
+  geom_line(aes(y = Median_Attained_Age_per_year), color = "orange", linetype = "dashed") +
+  labs(
+    title = "The annual average and median attained age at death",
+    x = "Calendar Year",
+    y = "The annual average attained age"
+  ) +
+  theme_minimal()
+
+# The annual average issue ages of policyholders alive
+AVG.attained_age_by_year <- AVG.attained_age_by_year %>% filter(Death == 0)
+
+ggplot(AVG.attained_age_by_year, aes(x = Calendar_Year)) +
+  geom_line(aes(y = Avg_Attained_Age_per_year), color = "darkgreen", size = 1.2) +
+  geom_point(aes(y = Avg_Attained_Age_per_year)) +
+  geom_line(aes(y = Median_Attained_Age_per_year), color = "orange", linetype = "dashed") +
+  labs(
+    title = "The annual average and Median attained age of alive policyholders",
+    x = "Calendar Year",
+    y = "The annual average attained age"
+  ) +
+  theme_minimal()
+```
+
+
+```{r}
+# Issue Age
+issue_Age_by_year <- policyTable %>%
+  group_by(Calendar_Year, Death) %>%
+  summarise(
+    Avg_Issue_Age = mean(Issue_Age, na.rm = TRUE),
+    Median_Issue_Age = median(Issue_Age, na.rm = TRUE)
+  )
+
+ggplot(issue_Age_by_year, aes(x = factor(Death), y = Avg_Issue_Age)) +
+  geom_boxplot(fill = "blue") +
+  stat_summary(fun = median, geom = "point", shape = 20, size = 3, color = "red") +
+  labs(
+    title = "Average and Median Issue Age by Year at Death",
+    x = "Death",
+    y = "Issue Age"
+  ) +
+  theme_minimal()
+
+
+# Attained Age
+attained_Age_by_year <- policyTable %>%
+  group_by(Calendar_Year, Death) %>%
+  summarise(
+    Avg_Attained_Age = mean(Attained_Age, na.rm = TRUE),
+    Median_Attained_Age = median(Attained_Age, na.rm = TRUE)
+  )
+
+ggplot(attained_Age_by_year, aes(x = factor(Death), y = Avg_Attained_Age)) +
+  geom_boxplot(fill = "blue") +
+  stat_summary(fun = median, geom = "point", shape = 20, size = 3, color = "red") +
+  labs(
+    title = "Average and Median Attained Age by Year at Death",
+    x = "Death",
+    y = "Attained Age"
+  ) +
+  theme_minimal()
+```
+
+
+```{r}
+noquote(print(""))
+print("Issue Age summary")
+issue_Age_by_year <- issue_Age_by_year %>% filter(Death == 1)
+summary(issue_Age_by_year)
+
+noquote(print(""))
+print("Attained Age summary")
+attained_Age_by_year <- attained_Age_by_year %>% filter(Death == 1)
+summary(attained_Age_by_year)
+
+# Overall average of attained age at death between 2005 and 2014
+policyTable %>% filter(Death == 1) %>% summarise(min(Attained_Age), max(Attained_Age), median(Attained_Age), mean(Attained_Age))
+
+# Issue age 
+policyTable %>% filter(Death == 1) %>% summarise(min(Issue_Age), max(Issue_Age), median(Issue_Age), mean(Issue_Age))
+
+```
+
+**Finding**
+
+    - The plot shows that the median of the average issue ages (Avg_Issue_Age) at death over the years is 61.58 years.
+      This median is approximately equal to the mean (61.75 years old) of the average issue ages.
+ 
+    - Furthermore, the range of the average attained ages (Avg_Attained_Age) at death across the years is [60.95; 66.50] years old,
+    with a median of 64.14 years old. This means that 50% of policyholders are expected to pass away around the age of 64.14 years old.
+
+    - Therefore, agents should avoid issuing policies to clients whose ages fall within this range or at the very least, adjust premiums
+    accordingly when attained ages approach 61 years.
+
+
+## Client Characteristics analysis by Agent
+
+### Proportion of Smokers by Agent and Year
+```{r}
+smoker_share_by_agent <- policyTable %>%
+  group_by(Calendar_Year, Agent, Smoker_Profil) %>%
+  summarise(Exposures = n()) %>%
+  group_by(Calendar_Year, Agent) %>%
+  mutate(Proportion = Exposures / sum(Exposures))
+
+ggplot(smoker_share_by_agent, aes(x = Calendar_Year, y = Proportion, fill = Smoker_Profil)) +
+  geom_bar(stat = "identity", position = "fill") +
+  facet_wrap(~Agent) +
+  scale_y_continuous(labels = percent_format()) +
+  labs(
+    title = "Proportion of Smokers/Non-Smokers by Agent Over Time",
+    y = "Proportion",
+    x = "Calendar Year",
+    fill = "Smoker Status"
+  ) +
+  theme_minimal()
+```
+
+### Average age at policy issue by agent and year
+```{r}
+issue_age_by_agent <- policyTable %>%
+  group_by(Calendar_Year, Agent) %>%
+  summarise(Avg_Issue_Age = mean(Issue_Age, na.rm = TRUE),
+            Avg_Attained_Age = mean(Attained_Age, na.rm = TRUE))
+
+ggplot(issue_age_by_agent, aes(x = Calendar_Year, y = Avg_Issue_Age, color = as.factor(Agent))) +
+  geom_line(size = 1) +
+  labs(
+    title = "Average Issue Age by Agent Over Time",
+    x = "Calendar Year",
+    y = "Average Issue Age",
+    color = "Agent"
+  ) +
+  theme_minimal()
+```
+
+**Findings**
+The plot above shows the evolution of average issue ages by agent seems to be stable around 54 and 55 years old, for the first four agents. Whereas, the average issue ages is very higher for agent 5. Indeed, it is stable around 63 years old between 2005 and 2014.
+
+
+### Distribution of issue age by agent over year
+```{r}
+ggplot(policyTable, aes(x = as.factor(Agent), y = Issue_Age)) +
+  geom_boxplot(fill = "skyblue") +
+  labs(
+    title = "Distribution of Issue Age by Agent",
+    x = "Agent",
+    y = "Issue Age"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+ggplot(policyTable, aes(x = as.factor(Agent), y = Issue_Age)) +
+  geom_boxplot(fill = "skyblue") +
+  facet_wrap(~ Calendar_Year) +
+  labs(
+    title = "Distribution of Issue Age by Agent and Year",
+    x = "Agent",
+    y = "Issue Age"
+  ) +
+  theme_minimal()
+```
+
+
+### Distribution of Blue/White Collar by Agent and Calendar year
+```{r}
+collar_share_by_agent <- policyTable %>%
+  group_by(Calendar_Year, Agent, Blue_or_White_Collar) %>%
+  summarise(Exposures = n()) %>%
+  group_by(Calendar_Year, Agent) %>%
+  mutate(Proportion = Exposures / sum(Exposures))
+
+ggplot(collar_share_by_agent, aes(x = Calendar_Year, y = Proportion, fill = Blue_or_White_Collar)) +
+  geom_bar(stat = "identity", position = "fill") +
+  facet_wrap(~Agent) +
+  scale_y_continuous(labels = percent_format()) +
+  labs(
+    title = "Proportion of Blue vs White Collar Clients by Agent",
+    y = "Proportion",
+    x = "Calendar Year",
+    fill = "Occupation"
+  ) +
+  theme_minimal()
+```
+
+No particular findings.
+
+
+# Focus on Agent 5 Portfolio Analysis
+
+```{r agent5-analysis, message=FALSE, warning=FALSE}
+# 1. Average Issue Age by Agent
+avg_age_by_agent <- policyTable %>%
+  group_by(Agent) %>%
+  summarise(AvgIssueAge = mean(Issue_Age, na.rm = TRUE)) %>%
+  arrange(desc(AvgIssueAge))
+
+agent5_age <- avg_age_by_agent %>% filter(Agent == 5) %>% pull(AvgIssueAge)
+portfolio_avg_age <- mean(avg_age_by_agent$AvgIssueAge)
+
+ggplot(avg_age_by_agent, aes(x = as.factor(Agent), y = AvgIssueAge, fill = as.factor(Agent))) +
+  geom_bar(stat = "identity") +
+  labs(title = "Average Issue Age by Agent", x = "Agent", y = "Average Age at Policy Issue") +
+  theme_minimal()
+```
+
+**Interpretation**
+Agent 5’s clients have an average issue age of 62.89 years old years, compared to a portfolio-wide average of 56.13 years.`
+A higher issue age may contribute to higher mortality rates.
+
+
+# Smoker Status Distribution by Agent
+```{r smoker-distribution}
+smoker_dist <- policyTable %>%
+  group_by(Agent, Smoker_Profil) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  mutate(Percentage = Count / sum(Count) * 100)
+
+ggplot(smoker_dist, aes(x = as.factor(Agent), y = Percentage, fill = Smoker_Profil)) +
+  geom_bar(stat = "identity", position = "stack") +
+  labs(title = "Smoker Status Distribution per Agent", x = "Agent", y = "Percentage") +
+  theme_minimal()
+```
+
+**Interpretation** Agent 5 doesn't have a **higher proportion of smokers** compared to other agents. Then, we can explain (partially) the quick increase of mortality rate of agent 5 between 2005 and 2014, by the fact that his policyholders are older than those from other agents.
+
+
+# Socio-Economic Classification Distribution by Agent
+```{r }
+collar_dist <- policyTable %>%
+  group_by(Agent, Blue_or_White_Collar) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  mutate(Percentage = Count / sum(Count) * 100)
+
+ggplot(collar_dist, aes(x = as.factor(Agent), y = Percentage, fill = Blue_or_White_Collar)) +
+  geom_bar(stat = "identity", position = "stack") +
+  labs(title = "Socio-Economic Class Distribution per Agent", x = "Agent", y = "Percentage (%)") +
+  theme_minimal()
+```
+
+**Interpretation** Agent 5 doesn't have a **higher proportion of blue collar neither white collar policyholders** than to other agents.
+
+
+# Face amount
+
+## Mortality Trends for $25,000 Face Amount Contracts
+```{r}
+# Mortalité annuelle selon le montant assuré
+mortality_by_face <- policyTable %>%
+  group_by(Calendar_Year, Face_amount) %>%
+  summarise(Deaths = sum(Death == 1), Exposure = n(), .groups = "drop") %>%
+  mutate(MortalityRate = Deaths / Exposure)
+
+ggplot(mortality_by_face, aes(x = Calendar_Year, y = MortalityRate, color = as.factor(Face_amount))) +
+  geom_line(size = 1.2) +
+  labs(title = "Annual Mortality Rate by Face Amount",
+       y = "Mortality Rate", color = "Face Amount ($)") +
+  theme_minimal() +
+  scale_y_continuous(labels = percent_format())
+```
+
+**Findings**
+
+    - We observe a deterioration in mortality over time across all face amounts, except for 
+     the $500,000 contracts, which experienced a sharp decline in mortality between 2005 and 2007, 
+     followed by a significant increase in mortality rates thereafter. Mortality rates within 
+     these subgroups appear to be highly volatile.
+
+    -In addition to the overall worsening of annual mortality rates by face amount, 
+    the chart also highlights the persistent excess mortality observed in the \$25,000
+    and \$100,000 contract groups over time.
+
+
+## Share of $25,000 and $100,000 Contracts in Each Agent’s Portfolio
+```{r}
+# Contract with face amount of 250 000$
+face_dist_by_agent <- policyTable %>%
+  filter(Face_amount == 25000) %>%
+  group_by(Calendar_Year, Agent) %>%
+  summarise(N_25000 = n(), .groups = "drop") %>%
+  left_join(
+    policyTable %>% group_by(Calendar_Year, Agent) %>% summarise(N_total = n(), .groups = "drop"),
+    by = c("Calendar_Year", "Agent")
+  ) %>%
+  mutate(Percentage = N_25000 / N_total)
+
+ggplot(face_dist_by_agent, aes(x = Calendar_Year, y = Percentage, color = as.factor(Agent))) +
+  geom_line(size = 1.2) +
+  labs(title = "Share of $25,000 Policies in Agent Portfolios",
+       y = "Percentage of Agent's Portfolio", color = "Agent") +
+  theme_minimal() +
+ scale_y_continuous(labels = percent_format())
+
+
+# Contract with face amount of 100 000$
+face_dist_by_agent <- policyTable %>%
+  filter(Face_amount == 100000) %>%
+  group_by(Calendar_Year, Agent) %>%
+  summarise(N_100000 = n(), .groups = "drop") %>%
+  left_join(
+    policyTable %>% group_by(Calendar_Year, Agent) %>% summarise(N_total = n(), .groups = "drop"),
+    by = c("Calendar_Year", "Agent")
+  ) %>%
+  mutate(Percentage = N_100000 / N_total)
+
+ggplot(face_dist_by_agent, aes(x = Calendar_Year, y = Percentage, color = as.factor(Agent))) +
+  geom_line(size = 1.2) +
+  labs(title = "Share of $100,000 Policies in Agent Portfolios",
+       y = "Percentage of Agent's Portfolio", color = "Agent") +
+  theme_minimal() +
+ scale_y_continuous(labels = percent_format())
+
+
+# Contract with face amount of 250 000$
+face_dist_by_agent <- policyTable %>%
+  filter(Face_amount == 250000) %>%
+  group_by(Calendar_Year, Agent) %>%
+  summarise(N_250000 = n(), .groups = "drop") %>%
+  left_join(
+    policyTable %>% group_by(Calendar_Year, Agent) %>% summarise(N_total = n(), .groups = "drop"),
+    by = c("Calendar_Year", "Agent")
+  ) %>%
+  mutate(Percentage = N_250000 / N_total)
+
+ggplot(face_dist_by_agent, aes(x = Calendar_Year, y = Percentage, color = as.factor(Agent))) +
+  geom_line(size = 1.2) +
+  labs(title = "Share of $250,000 Policies in Agent Portfolios",
+       y = "Percentage of Agent's Portfolio", color = "Agent") +
+  theme_minimal() +
+ scale_y_continuous(labels = percent_format())
+```
+
+**$25,000 Face Amount**
+  Contracts with a $25,000 face amount are the most common across all agents’ portfolios.
+  
+  They accounted for approximately 30% to 32% of the portfolios between 2007 and 2014,
+  with a convergence toward 30–31% across agents after 2006.
+  
+  Agent 5 experienced a sharp decline in the share of $25,000 contracts between 2005 and 2007,
+  dropping from over 33% to around 30.5%, before      stabilizing slightly above 30%.
+  
+  Since policyholders with $25,000 contracts exhibit higher mortality rates compared to other
+  face amounts, the growing share of these contracts   in agents' portfolios clearly contributes
+  to the increase in overall mortality rates. This trend partially explains the rising annual 
+  mortality observed at the portfolio level.
+
+**$100,000 Face Amount**
+  Contracts with a $100,000 face amount accounted for between 29% and 31% of agents’ portfolios from 2005 to 2014.
+  
+  There is also a convergence toward 30% across agents as we approach 2014, with the exception of Agent 5.
+  
+  Indeed, Agent 5 maintained a higher share of $100,000 contracts than other agents, with this proportion
+  remaining stable at around 31% throughout the period.
+
+**Summary Observation**
+  Policyholders with \$25,000, \$100,000, and \$250,000 contracts, despite having higher
+  mortality rates, also represent a growing and significant portion of agents’ portfolios.
+  This shift in portfolio composition contributes directly to the overall increase in
+  mortality rates   observed in the total portfolio over time.
+
+**Comment**
+  The total number of \$25,000 and \$100,000 contracts in the overall portfolio increased steadily
+  between 2005 and 2014. This growth reinforces the earlier observation regarding their rising share in agents’ portfolios.
+  
+  The upward trend in these two face amount groups, both associated with higher mortality rates,
+  contributes significantly to the deterioration of mortality experience at the portfolio level.
+  This indicates that changes in portfolio structure, particularly the growing prevalence of 
+  high-risk contract sizes, play a key role in explaining the increase in observed mortality over time.
+
+
+## Evolution of the Total Number of $25,000 and $100,000 Contracts in the Overall Portfolio
+```{r}
+# Face amount $25,000
+face_growth <- policyTable %>%
+  filter(Face_amount == 25000) %>%
+  group_by(Calendar_Year) %>%
+  summarise(Count = n())
+
+ggplot(face_growth, aes(x = Calendar_Year, y = Count)) +
+  geom_line(color = "darkred", size = 1.3) +
+  geom_point(size = 2) +
+  labs(title = "Total Number of $25,000 Policies Over Time",
+       y = "Number of Policies") +
+  theme_minimal()
+
+# Face amount $100,000
+face_growth <- policyTable %>%
+  filter(Face_amount == 100000) %>%
+  group_by(Calendar_Year) %>%
+  summarise(Count = n())
+
+ggplot(face_growth, aes(x = Calendar_Year, y = Count)) +
+  geom_line(color = "darkred", size = 1.3) +
+  geom_point(size = 2) +
+  labs(title = "Total Number of $100,000 Policies Over Time",
+       y = "Number of Policies") +
+  theme_minimal()
+
+# Face amount $250,000
+face_growth <- policyTable %>%
+  filter(Face_amount == 250000) %>%
+  group_by(Calendar_Year) %>%
+  summarise(Count = n())
+
+ggplot(face_growth, aes(x = Calendar_Year, y = Count)) +
+  geom_line(color = "darkred", size = 1.3) +
+  geom_point(size = 2) +
+  labs(title = "Total Number of $250,000 Policies Over Time",
+       y = "Number of Policies") +
+  theme_minimal()
+```
+
+**Interpretation**
+These charts confirm the overall growth of \$25,000, \$100,000, and \$250,000 contracts in the total portfolio,
+despite the fact that these subgroups exhibit relatively higher mortality rates compared to others, such as
+the \$500,000 and \$1,000,000 contracts.
